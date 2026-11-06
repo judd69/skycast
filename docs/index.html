@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skycast — live weather for any city</title>
+<meta name="description" content="Skycast: search any city and get live current conditions, a 7-day forecast and a 24-hour temperature chart from Open-Meteo. No sign-up, no API key.">
+<style>
+  :root{--base:#0F172A;--surface:#1E293B;--surface2:#273449;--text:#F1F5F9;--muted:#94A3B8;--accent:#38BDF8;--line:#334155}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--base);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent)}
+  header{max-width:980px;margin:0 auto;padding:28px 20px 0;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  .logo{font-size:22px;font-weight:800;letter-spacing:-.02em}.logo span{color:var(--accent)}
+  nav a{color:var(--muted);text-decoration:none;margin-left:18px;font-size:14px} nav a:hover{color:var(--text)}
+  main{max-width:980px;margin:0 auto;padding:28px 20px 60px}
+  h1{font-size:clamp(38px,6vw,64px);line-height:1.02;letter-spacing:-.03em;margin:10px 0 12px}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--muted);font-size:18px;max-width:640px;line-height:1.5;margin:0 0 28px}
+  .badge{display:inline-block;background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:6px 12px;font-size:13px;color:var(--muted)}
+  .search{display:flex;gap:10px;position:relative;max-width:640px}
+  .search input{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;color:var(--text);padding:14px 16px;font-size:16px;outline:none}
+  .search input:focus{border-color:var(--accent)}
+  button{cursor:pointer;border:0;border-radius:12px;padding:14px 22px;font-size:16px;font-weight:700;background:var(--accent);color:#082F49}
+  button.ghost{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+  .suggest{position:absolute;top:56px;left:0;right:0;background:var(--surface2);border:1px solid var(--line);border-radius:12px;overflow:hidden;z-index:5;display:none}
+  .suggest div{padding:12px 16px;cursor:pointer}.suggest div:hover{background:var(--surface)}
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 0}
+  .chip{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer}
+  .chip.active{border-color:var(--accent);color:var(--accent)}
+  .chip .x{margin-left:8px;color:var(--muted)}
+  .grid{display:grid;grid-template-columns:1.4fr 1fr;gap:16px;margin-top:24px}
+  @media(max-width:720px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:24px}
+  .big{font-size:64px;font-weight:800;letter-spacing:-.03em;line-height:1}
+  .big small{font-size:28px;color:var(--muted)}
+  .cond{font-size:20px;margin:8px 0 4px}
+  .meta{color:var(--muted);line-height:1.7}
+  .advice{border-left:3px solid var(--accent);padding:4px 0 4px 14px;color:var(--text);line-height:1.6}
+  .days{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-top:16px}
+  @media(max-width:720px){.days{grid-template-columns:repeat(4,1fr)}}
+  .day{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 10px;text-align:center}
+  .day b{display:block}.day .mn{color:var(--muted)}
+  .day .rn{color:#7DD3FC;font-size:13px}
+  .err{background:#450A0A;border:1px solid #7F1D1D;border-radius:12px;padding:14px 16px;display:none;margin-top:16px}
+  .toggle{display:flex;gap:8px;align-items:center}
+  .toggle button{padding:8px 14px;font-size:14px}
+  .toggle button.on{background:var(--accent);color:#082F49}
+  .toggle button:not(.on){background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+  svg{width:100%;height:180px;display:block}
+  .chart-label{color:var(--muted);font-size:13px}
+  footer{color:var(--muted);font-size:13px;line-height:1.6;margin-top:32px}
+  code{background:var(--surface2);padding:2px 6px;border-radius:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Sky<span>cast</span></div>
+  <nav>
+    <a href="https://github.com/judd69/skycast">Repository</a>
+    <a href="https://open-meteo.com/" target="_blank" rel="noopener">Data: Open-Meteo</a>
+  </nav>
+</header>
+<main>
+  <span class="badge">Live data · No sign-up · No API key</span>
+  <h1>What is the sky doing<br><span>where you are going?</span></h1>
+  <p class="sub">Search any city and Skycast pulls live current conditions, a 7-day forecast and a 24-hour temperature curve from Open-Meteo — then tells you, in plain words, what to carry.</p>
+
+  <div class="search">
+    <input id="q" type="text" placeholder="Search a city — try Mumbai, London, Tokyo…" autocomplete="off">
+    <button id="go">Search</button>
+    <div class="suggest" id="suggest"></div>
+  </div>
+  <div class="chips" id="chips"></div>
+  <div class="err" id="err"></div>
+
+  <div class="grid">
+    <section class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+        <div>
+          <div id="place" style="font-size:20px;font-weight:700">Mumbai, Maharashtra, India</div>
+          <div id="updated" class="meta">Loading live data…</div>
+        </div>
+        <div class="toggle">
+          <button id="unitC" class="on">°C</button>
+          <button id="unitF">°F</button>
+        </div>
+      </div>
+      <div style="margin-top:20px"><span class="big" id="temp">–</span></div>
+      <div class="cond" id="cond">–</div>
+      <div class="meta" id="meta">–</div>
+      <div style="margin-top:18px"><div class="advice" id="advice">–</div></div>
+    </section>
+    <section class="card">
+      <div style="font-weight:700;margin-bottom:4px">Next 24 hours</div>
+      <div class="chart-label" id="chartLabel">Temperature curve, local time</div>
+      <svg id="chart" viewBox="0 0 600 180" preserveAspectRatio="none" aria-label="24-hour temperature chart"></svg>
+      <div style="display:flex;justify-content:space-between" class="chart-label"><span id="t0"></span><span id="t12"></span><span id="t23"></span></div>
+    </section>
+  </div>
+
+  <div class="days" id="days"></div>
+
+  <footer>
+    <p>Skycast is a Java project too: the same Open-Meteo endpoints are wrapped by a zero-dependency Java client and CLI in the repository — <code>java -jar build/skycast.jar "Mumbai"</code>, with <code>--json</code>, <code>--fahrenheit</code> and a built-in <code>--serve</code> dashboard mode. Weather data by Open-Meteo (CC BY 4.0), from national weather services.</p>
+    <p>If the API cannot be reached, this page says so instead of showing invented weather.</p>
+  </footer>
+</main>
+<script>
+const WMO = {0:"Clear sky",1:"Mainly clear",2:"Partly cloudy",3:"Overcast",45:"Fog",48:"Fog",51:"Drizzle",53:"Drizzle",55:"Drizzle",56:"Freezing drizzle",57:"Freezing drizzle",61:"Light rain",63:"Rain",65:"Heavy rain",66:"Freezing rain",67:"Freezing rain",71:"Light snow",73:"Snow",75:"Heavy snow",77:"Snow grains",80:"Light rain showers",81:"Rain showers",82:"Violent rain showers",85:"Snow showers",86:"Snow showers",95:"Thunderstorm",96:"Thunderstorm with hail",99:"Thunderstorm with hail"};
+const label = c => WMO[c] || "Unknown conditions";
+const isWet = c => (c>=51&&c<=67)||(c>=80&&c<=82)||c>=95;
+const isSnow = c => (c>=71&&c<=77)||c===85||c===86;
+let unitF = false, current = null, chartPts = null;
+const $ = id => document.getElementById(id);
+const conv = c => unitF ? c*9/5+32 : c;
+const fmt = c => conv(c).toFixed(1) + "°" + (unitF ? "F" : "C");
+const savedKey = "skycast-saved";
+const getSaved = () => { try { return JSON.parse(localStorage.getItem(savedKey)) || []; } catch(e){ return []; } };
+const setSaved = v => localStorage.setItem(savedKey, JSON.stringify(v));
+
+function advice(f){
+  const tips = [];
+  const todayRain = f.daily.precipitation_probability_max ? f.daily.precipitation_probability_max[0] : 0;
+  if (todayRain >= 50 || isWet(f.current.weather_code)) tips.push("Carry an umbrella — rain is likely today.");
+  if (isSnow(f.current.weather_code)) tips.push("Wear warm, waterproof layers — snow is in the forecast.");
+  const max = Math.max(...f.daily.temperature_2m_max), min = Math.min(...f.daily.temperature_2m_min);
+  if (max >= 35) tips.push("It gets hot this week — carry water and sun protection.");
+  if (min <= 5) tips.push("Mornings get cold — take a jacket.");
+  if (f.current.wind_speed_10m >= 40) tips.push("Strong wind right now — hold on to loose items.");
+  if (!tips.length) tips.push("Clear and comfortable — no special gear needed.");
+  return tips.join(" ");
+}
+
+function drawChart(temps, labels, animate){
+  const W = 600, H = 180, pad = 14;
+  const min = Math.min(...temps), max = Math.max(...temps), span = (max - min) || 1;
+  const pts = temps.map((t,i)=>[pad + i*(W-2*pad)/(temps.length-1), H-pad - (t-min)/span*(H-2*pad)]);
+  const svg = $("chart");
+  const from = (animate && chartPts && chartPts.length === pts.length) ? chartPts : pts;
+  chartPts = pts;
+  const start = performance.now(), dur = 600;
+  function frame(now){
+    const k = Math.min(1, (now-start)/dur), e = 1 - Math.pow(1-k, 3);
+    const cur = pts.map((p,i)=>[from[i][0] + (p[0]-from[i][0])*e, from[i][1] + (p[1]-from[i][1])*e]);
+    const line = cur.map((p,i)=>(i?"L":"M")+p[0].toFixed(1)+" "+p[1].toFixed(1)).join(" ");
+    const area = line + " L"+(W-pad)+" "+(H-pad)+" L"+pad+" "+(H-pad)+" Z";
+    svg.innerHTML = '<path d="'+area+'" fill="#38BDF8" opacity="0.12"/><path d="'+line+'" fill="none" stroke="#38BDF8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      cur.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="3" fill="#0F172A" stroke="#38BDF8" stroke-width="2"/>').join("");
+    if (k < 1) requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  $("t0").textContent = labels[0] || "";
+  $("t12").textContent = labels[12] || "";
+  $("t23").textContent = labels[labels.length-1] || "";
+}
+
+function render(place, f, animate){
+  current = {place, f};
+  $("place").textContent = place;
+  $("updated").textContent = "Updated " + f.current.time.replace("T"," ") + " · " + f.timezone;
+  $("temp").innerHTML = fmt(f.current.temperature_2m) + '<small> feels ' + fmt(f.current.apparent_temperature) + '</small>';
+  $("cond").textContent = label(f.current.weather_code);
+  $("meta").textContent = "Humidity " + f.current.relative_humidity_2m + "% · Wind " + f.current.wind_speed_10m + " km/h";
+  $("advice").textContent = advice(f);
+  $("days").innerHTML = f.daily.time.map((d,i)=>{
+    const dt = new Date(d + "T12:00:00");
+    const wd = dt.toLocaleDateString(undefined, {weekday:"short"});
+    const rain = f.daily.precipitation_probability_max ? f.daily.precipitation_probability_max[i] : 0;
+    return '<div class="day"><b>'+wd+'</b><div style="color:var(--muted);font-size:13px">'+d.slice(5)+'</div><div style="margin:8px 0">'+label(f.daily.weather_code[i])+'</div><div><b>'+fmt(f.daily.temperature_2m_max[i])+'</b> <span class="mn">'+fmt(f.daily.temperature_2m_min[i])+'</span></div><div class="rn">'+(rain ? "Rain "+rain+"%" : "No rain")+'</div></div>';
+  }).join("");
+  const idx = f.hourly.time.findIndex(t => t >= f.current.time);
+  const start = idx < 0 ? 0 : idx;
+  const temps = f.hourly.temperature_2m.slice(start, start+24);
+  const labels = f.hourly.time.slice(start, start+24).map(t => t.slice(11,16));
+  drawChart(temps, labels, animate);
+  renderChips();
+}
+
+function renderChips(){
+  const saved = getSaved();
+  $("chips").innerHTML = saved.map(s=>'<span class="chip" data-name="'+s.name.replace(/"/g,"")+'">'+s.name+'<span class="x" data-remove="'+s.name.replace(/"/g,"")+'">×</span></span>').join("");
+  document.querySelectorAll("#chips .chip").forEach(ch=>{
+    ch.addEventListener("click", e=>{
+      const rem = e.target.getAttribute("data-remove");
+      if (rem){ setSaved(getSaved().filter(s=>s.name!==rem)); renderChips(); return; }
+      loadPlace({name: ch.getAttribute("data-name"), latitude: null, longitude: null, saved: true});
+    });
+  });
+}
+
+async function loadPlace(p){
+  $("err").style.display = "none";
+  try {
+    let place = p;
+    if (place.latitude == null){
+      const saved = getSaved().find(s=>s.name===p.name);
+      if (saved) place = saved;
+      else { $("err").textContent = "Saved city not found — search it again."; $("err").style.display = "block"; return; }
+    }
+    const url = "https://api.open-meteo.com/v1/forecast?latitude="+place.latitude+"&longitude="+place.longitude+"&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m&hourly=temperature_2m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=7";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Open-Meteo returned HTTP " + res.status);
+    const f = await res.json();
+    const display = [place.name, place.admin1, place.country].filter(Boolean).join(", ");
+    render(display, f, true);
+    const saved = getSaved();
+    if (!saved.find(s=>s.name===display)) { saved.unshift({name: display, latitude: place.latitude, longitude: place.longitude}); setSaved(saved.slice(0,6)); }
+  } catch(e){
+    $("err").textContent = "Could not load live weather: " + e.message + ". Check your connection and try again — no forecast is shown rather than a guessed one.";
+    $("err").style.display = "block";
+  }
+}
+
+async function search(q){
+  if (!q.trim()) return;
+  $("suggest").style.display = "none";
+  try {
+    const res = await fetch("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(q)+"&count=5&language=en&format=json");
+    const data = await res.json();
+    if (!data.results || !data.results.length){ $("err").textContent = "No place found for '"+q+"'. Try another spelling."; $("err").style.display = "block"; return; }
+    loadPlace(data.results[0]);
+  } catch(e){
+    $("err").textContent = "Search failed: " + e.message; $("err").style.display = "block";
+  }
+}
+
+let timer = null;
+$("q").addEventListener("input", e=>{
+  clearTimeout(timer);
+  const q = e.target.value.trim();
+  if (q.length < 2){ $("suggest").style.display = "none"; return; }
+  timer = setTimeout(async ()=>{
+    try {
+      const res = await fetch("https://geocoding-api.open-meteo.com/v1/search?name="+encodeURIComponent(q)+"&count=5&language=en&format=json");
+      const data = await res.json();
+      if (!data.results){ $("suggest").style.display = "none"; return; }
+      $("suggest").innerHTML = data.results.map(r=>'<div data-lat="'+r.latitude+'" data-lon="'+r.longitude+'" data-name="'+[r.name,r.admin1,r.country].filter(Boolean).join(", ")+'">'+[r.name,r.admin1,r.country].filter(Boolean).join(", ")+'</div>').join("");
+      $("suggest").style.display = "block";
+      document.querySelectorAll("#suggest div").forEach(d=>d.addEventListener("click", ()=>{
+        $("q").value = d.getAttribute("data-name");
+        $("suggest").style.display = "none";
+        loadPlace({name: d.getAttribute("data-name"), latitude: parseFloat(d.getAttribute("data-lat")), longitude: parseFloat(d.getAttribute("data-lon"))});
+      }));
+    } catch(e){ /* suggestions are best-effort; the Search button still works */ }
+  }, 250);
+});
+$("go").addEventListener("click", ()=>search($("q").value));
+$("q").addEventListener("keydown", e=>{ if (e.key === "Enter") search($("q").value); });
+$("unitC").addEventListener("click", ()=>{ unitF = false; $("unitC").className = "on"; $("unitF").className = ""; if (current) render(current.place, current.f, true); });
+$("unitF").addEventListener("click", ()=>{ unitF = true; $("unitF").className = "on"; $("unitC").className = ""; if (current) render(current.place, current.f, true); });
+document.addEventListener("click", e=>{ if (!$("suggest").contains(e.target) && e.target.id !== "q") $("suggest").style.display = "none"; });
+
+renderChips();
+loadPlace({name: "Mumbai, Maharashtra, India", latitude: 19.076, longitude: 72.877});
+</script>
+</body>
+</html>
